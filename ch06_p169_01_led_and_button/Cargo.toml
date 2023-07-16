@@ -1,0 +1,14 @@
+[package]
+name = "ch06_p169_01_led_and_button"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+wio_terminal = "0.6.1" # 必須クレート
+panic-halt = "0.2" # 必須クレート
+heapless = "0.5" # ボタン操作で使用する
+cortex-m = "0.7.3" # ボタン操作で使用する
+cortex-m-rt = { version = "0.7", optional = true } # ボタン操作で使用する
+
