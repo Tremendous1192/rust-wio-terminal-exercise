@@ -1,19 +1,25 @@
-// 8章2節P314のプログラム
-// 現時点ではエラーが出て動かない
-// 2021年4月時点の embedded-graphics = "0.6.2" には egrectangle マクロがついていたが、
-// 2023年7月時点の 0.8.0 ではこのマクロが廃止されている
+// 基礎から学ぶ組込みRustのP314の写経
+// 著者公開のGitHubページは歯抜けのため、学習するのが辛い
+// https://github.com/tomoyuki-nakabayashi/wio-examples-template/blob/master/examples/8-2-mic_fft.rs
+
 
 #![no_std]
 #![no_main]
 
+use microfft; // 元のコードに抜けていた
 use panic_halt as _;
 use wio_terminal as wio;
 
+use core::convert::TryInto;
 use core::fmt::Write;
+
 use cortex_m::peripheral::NVIC;
+
 use heapless::consts::*;
 use heapless::Vec;
+
 use micromath::F32Ext;
+
 use wio::entry;
 use wio::hal::adc::{FreeRunning, InterruptAdc};
 use wio::hal::clock::GenericClockController;
@@ -88,11 +94,21 @@ fn main() -> ! {
     let mut delay = Delay::new(core.SYST, &mut clocks);
 
     // TODO: フリーランニングモードでADCを動かすようにInterruptAdc型を構築する
+    let (microphone_adc, mut microphone_pin) = sets.microphone.init(
+        peripherals.ADC1,
+        &mut clocks,
+        &mut peripherals.MCLK,
+        &mut sets.port,
+    );
+    let mut microphone_adc: InterruptAdc<_, FreeRunning> = InterruptAdc::from(microphone_adc);
+
+    // ADCの変換処理を開始する
+    microphone_adc.start_conversion(&mut microphone_pin);
 
     // デバッグ用UARTを初期化する
     let mut serial = sets.uart.init(
         &mut clocks,
-        Hertz(115200u32),
+        Hertz(115_200u32),
         peripherals.SERCOM2,
         &mut peripherals.MCLK,
         &mut sets.port,
@@ -112,6 +128,19 @@ fn main() -> ! {
         .unwrap();
 
     // TODO: 共有リソースを初期化する
+    unsafe {
+        CTX = Some(Ctx {
+            adc: microphone_adc,
+            buffers: [Vec::new(), Vec::new()],
+            sampling_buffer: None,
+            processing_buffer: None,
+        });
+        // 2面分のサンプリングバッファを取り込み用途処理用にそれぞれ割り当てる
+        let mut ctx = CTX.as_mut().unwrap();
+        let (first, rest) = ctx.buffers.split_first_mut().unwrap();
+        ctx.sampling_buffer = Some(first);
+        ctx.processing_buffer = Some(&mut rest[0]);
+    }
 
     // ADC変換完了割り込み(RESRDY)を有効にしてサンプリングを開始する
     writeln!(&mut serial, "start").unwrap();
@@ -136,16 +165,16 @@ fn main() -> ! {
     // 画面のスペクトラム表示領域の内容を消す
     const SCREEN_WIDTH: i32 = 320;
     const SCREEN_HEIGHT: i32 = 240;
-    fn clear_screen<T: DrawTarget<Rgb565>>(
+    fn clear_screen<T: embedded_graphics::DrawTarget<Rgb565>>(
         display: &mut T,
     ) -> Result<(), T::Error> {
         egrectangle!(
-            top_left = (0, 0),
-            bottom_right = (SCREEN_WIDTH - 1, SCREEN_HEIGHT - 1),
+            top_left = (0_i32, 0_i32),
+            bottom_right = (SCREEN_WIDTH - 1_i32, SCREEN_HEIGHT - 1_i32),
             style = primitive_style!(fill_color = Rgb565::BLACK)
         )
         .draw(display)
-    };
+    }
     clear_screen(&mut display).unwrap();
 
     const BAR_WIDTH: i32 = 2;
@@ -164,7 +193,7 @@ fn main() -> ! {
         // 割り込みハンドラが触らないので注意
         let processing_buffer = unsafe {
             let ctx = CTX.as_mut().unwrap();
-            ctx.processing_buffer.as_mut().unwrap();
+            ctx.processing_buffer.as_mut().unwrap()
         };
         let len = processing_buffer.len();
         let cap = processing_buffer.capacity();
@@ -178,12 +207,12 @@ fn main() -> ! {
             let result = microfft::real::rfft_256(processing_buffer.as_mut());
 
             // スペクトルを描画する
-            let offset_top = 0_u32;
-            let offset_left = (SCREEN_WIDTH - DRAW_AREA_WIDTH) / 2_u32;
-            let area_height = SCREEN_HEIGHT;
-            for (step, spectrum) in result.iter().enumrate() {
+            let offset_top: i32 = 0;
+            let offset_left: i32 = (SCREEN_WIDTH - DRAW_AREA_WIDTH) / 2_i32;
+            let area_height: i32 = SCREEN_HEIGHT;
+            for (step, spectrum) in result.iter().enumerate() {
                 // パワーの計算
-                let power = spectrum.norm_sqr() / (FFT_POINTS * FFT_POINTS) as f32;
+                let power = spectrum.norm_sqr() / ((FFT_POINTS * FFT_POINTS) as f32);
                 // 対数にする
                 let relative_power = if power <= 0_f32 {
                     core::f32::NEG_INFINITY
@@ -191,35 +220,38 @@ fn main() -> ! {
                     power.log10() * 10_f32
                 };
                 // 値からY座標を計算
-                let height = ((relative_power + 50_f32) * 5_f32)
+                let height: i32 = -(((relative_power + 50_f32) * 5_f32)
                     .round()
                     .max(-area_height as f32)
-                    .min(0.0) as i32;
+                    .min(0.0) as i32);
                 // Y座標から色を計算
-                let intensity = (height * 255_u32) / (SCREEN_HEIGHT / 2_u32);
-                let red = if height < SCREEN_HEIGHT / 2_u32 {
-                    255_u32 - intensity
+                let intensity: i32 = (height * 255_i32) / (SCREEN_HEIGHT / 2_i32);
+                let red = if height < SCREEN_HEIGHT / 2_i32 {
+                    255_i32 - intensity
                 } else {
-                    0_u32
+                    0_i32
                 };
-                let green = if height < SCREEN_HEIGHT / 2_u32 {
+                let green = if height < SCREEN_HEIGHT / 2_i32 {
                     intensity
                 } else {
-                    511_u32 - intensity
+                    511_i32 - intensity
                 };
-                let blue = if height < SCREEN_HEIGHT / 2_u32 {
-                    0_u32
+                let blue = if height < SCREEN_HEIGHT / 2_i32 {
+                    0_i32
                 } else {
-                    intensity - 256_u32;
+                    intensity - 256_i32
                 };
 
                 // 前回のバーを消す
-                let start_x = offset_left + step as i32 * BAR_WIDTH;
-                let end_x = offset_left + (step + 1_u32) as i32 * BAR_WIDTH;
+                let start_x: i32 = offset_left + step as i32 * BAR_WIDTH;
+                let end_x: i32 = offset_left + (step + 1_usize) as i32 * BAR_WIDTH;
                 let prev_y = prev_bar_position[step] as i32;
                 egrectangle!(
                     top_left = (start_x, prev_y),
-                    bottom_right = (end_x, (prev_y + 2).min(area_height - 1)),
+                    bottom_right = (
+                        end_x,
+                        (prev_y + 2_i32).min(area_height - 1_i32)
+                    ),
                     style = primitive_style!(fill_color = Rgb565::BLACK)
                 )
                 .draw(&mut display)
@@ -229,7 +261,7 @@ fn main() -> ! {
                     // 停止要求時は見やすくするために棒グラフにする
                     egrectangle!(
                         top_left = (start_x, offset_top + height),
-                        bottom_right = (end_x, area_height - 1),
+                        bottom_right = (end_x, area_height - 1_i32),
                         style = primitive_style!(
                             fill_color = Rgb888::new(red as u8, green as u8, blue as u8).into()
                         )
@@ -237,10 +269,14 @@ fn main() -> ! {
                     .draw(&mut display)
                     .unwrap();
                 } else {
-                    // 普段は望を描くのは遅いので点だけ描く
+                    // 普段は棒グラフを描くのは遅いので点だけ描く
                     egrectangle!(
                         top_left = (start_x, offset_top + height),
-                        bottom_right = (end_x, (offset_top + height + 2).min(area_height - 1)),
+                        bottom_right = (
+                            end_x,
+                            (offset_top + height + 2_i32)
+                                .min((area_height - 1_i32).try_into().unwrap())
+                        ),
                         style = primitive_style!(
                             fill_color = Rgb888::new(red as u8, green as u8, blue as u8).into()
                         )
@@ -262,7 +298,7 @@ fn main() -> ! {
             // リスタートボタンが押されるまで停止
             stop_req = false;
             stop_ack = false;
-            while !button_restart.is_low.unwrap() {}
+            while !button_restart.is_low().unwrap() {}
             // 画面クリア
             clear_screen(&mut display).unwrap();
         }
@@ -271,8 +307,9 @@ fn main() -> ! {
 
 #[interrupt]
 fn ADC1_RESRDY() {
-    static mut AVERAGE: f32 = 0_f32; // 平均値
-    static mut AVERAGE_COUNT: u32 = 0_u32; // 平均値計算時のサンプル数カウント
+    // TODO: データをサンプリングし、`sampling_buffer`を埋める。
+    static mut AVERAGE: f32 = 0.0; // 平均値
+    static mut AVERAGE_COUNT: u32 = 0; // 平均値計算時のサンプル数カウント
     unsafe {
         let ctx = CTX.as_mut().unwrap();
         if let Some(sample) = ctx.adc.service_interrupt_ready() {
@@ -280,7 +317,7 @@ fn ADC1_RESRDY() {
             *AVERAGE += sample as f32;
             *AVERAGE_COUNT += 1_u32;
             if *AVERAGE_COUNT == AVERAGING_FACTOR {
-                // 平均値計算回数文のサンプルデータを積算した
+                //平均値計算回数文のサンプルデータを積算した
                 let sampling_buffer = ctx.sampling_buffer.as_mut().unwrap();
                 if sampling_buffer.len() == sampling_buffer.capacity() {
                     // サンプリングバッファがいっぱいなので処理用バッファが空
@@ -289,7 +326,7 @@ fn ADC1_RESRDY() {
                         core::mem::swap(&mut ctx.processing_buffer, &mut ctx.sampling_buffer);
                     }
                 } else {
-                    // サンプリングバッファに平均値を追加する
+                    //サンプリングバッファに平均値を追加する
                     let _ = sampling_buffer.push(*AVERAGE / (AVERAGING_FACTOR as f32));
                 }
                 // 積算カウントを0に戻す
