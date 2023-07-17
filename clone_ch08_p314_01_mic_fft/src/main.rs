@@ -1,7 +1,6 @@
 // 基礎から学ぶ組込みRustのP314の写経
-// 著者公開のGitHubページは歯抜けのため、学習するのが辛い
 // https://github.com/tomoyuki-nakabayashi/wio-examples-template/blob/master/examples/8-2-mic_fft.rs
-
+// 内容把握のためRust 2018で書いている
 
 #![no_std]
 #![no_main]
