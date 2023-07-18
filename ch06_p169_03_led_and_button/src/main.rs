@@ -22,6 +22,7 @@ button_interrupt!(
 );
 // ここまで ボタン操作の最小構成
 
+// Wio Terminalの右上のボタン(button1)以外のボタンを押すと、内臓LEDの点滅間隔が変化するプログラム
 #[wio::entry] // 必須アトリビュート
 fn main() -> ! {
     // 初期化

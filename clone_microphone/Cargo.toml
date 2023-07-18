@@ -1,5 +1,5 @@
 [package]
-name = "ch08_p314_01_mic_fft"
+name = "clone_microphone"
 version = "0.1.0"
 edition = "2021"
 
@@ -8,3 +8,6 @@ edition = "2021"
 [dependencies]
 wio_terminal = "0.6.1" # 必須クレート
 panic-halt = "0.2" # 必須クレート
+embedded-graphics = "0.7.1" # 描画関係
+cortex-m = "0.7.3"
+heapless = "0.5"
