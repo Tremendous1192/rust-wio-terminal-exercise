@@ -8,3 +8,14 @@ edition = "2021"
 [dependencies]
 wio_terminal = "0.6.1" # 必須クレート
 panic-halt = "0.2" # 必須クレート
+heapless = "0.7.16" # ヒープ上のデータをスタックに置けるようにする
+cortex-m = "0.7.7"
+micromath = "2.0.0"
+embedded-graphics = "0.7.1" # 最新の0.8.0だとdisplayを渡せない
+microfft = "0.3.1" # 最新の0.5.1だと引数の型が異なっている
+cortex-m-rt = "0.7.3"
+nb = "1.1.0"
+accelerometer = "0.12.0"
+
+
+
