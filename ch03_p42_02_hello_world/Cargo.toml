@@ -1,5 +1,5 @@
 [package]
-name = "ch03_p42_hello_world"
+name = "ch03_p42_02_hello_world"
 version = "0.1.0"
 edition = "2021"
 
