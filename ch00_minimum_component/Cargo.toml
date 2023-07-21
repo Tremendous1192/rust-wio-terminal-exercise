@@ -2,9 +2,10 @@
 name = "ch00_minimam_component"
 version = "0.1.0"
 edition = "2021"
+description = "Wio Terminalをコンパイルできる最小限の構成"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-wio_terminal = "0.6.1" # 必須クレート
+wio_terminal = "0.7.0" # 必須クレート
 panic-halt = "0.2" # 必須クレート

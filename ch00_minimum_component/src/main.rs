@@ -10,11 +10,9 @@ const DISPLAY_HEIGHT: u32 = 240; // 画面高さの定数. ほぼ必須で良い
 fn main() -> ! {
     // 初期化
     // ここまで 初期化
-    
+
     // 組込みはloop必須
-    loop
-    {}
+    loop {}
     // ここまでloop処理
 }
 // ここまでmain関数
-
