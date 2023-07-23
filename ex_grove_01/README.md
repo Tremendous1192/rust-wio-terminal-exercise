@@ -4,7 +4,7 @@ Wio Terminalに[GROVE - ブザー](https://www.switch-science.com/products/804)�
 # 接続方法
 正面から見て左側の Grove 端子にブザーを取り付ける。
 
-![Alt text](setup_buzzer.JPG)
+![Alt text](DSC_1106.JPG)
 
 # 外部機器への接続に関する雑感
 抽象化しやすい```wio_terminal::Sets```よりも、ベタ打ちしやすい```wio_terminal::Pins```で書いた方が分かりやすい。
