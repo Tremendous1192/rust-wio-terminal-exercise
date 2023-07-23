@@ -2,8 +2,8 @@
 #![no_std] // 必須アトリビュート
 #![no_main] // 必須アトリビュート
 use panic_halt as _; // 必須クレート
-use wio_terminal as wio; // 必須クレート
 use wio::prelude::*; // ほぼ必須
+use wio_terminal as wio; // 必須クレート
 const DISPLAY_WIDTH: u32 = 320; // 画面幅の定数. ほぼ必須で良いだろう
 const DISPLAY_HEIGHT: u32 = 240; // 画面高さの定数. ほぼ必須で良いだろう
 
