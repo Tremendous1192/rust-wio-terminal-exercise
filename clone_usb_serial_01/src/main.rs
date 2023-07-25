@@ -2,19 +2,15 @@
 #![no_std]
 #![no_main]
 
-
 use panic_halt as _; // 必須クレート
 use wio_terminal as wio; // 必須クレート
 
 use wio::pac::interrupt; // 割り込み処理の宣言 use を外すことができない
 use wio::prelude::*; // ほぼ必須モジュール
 
-use embedded_graphics as eg; // 描画関係
-
 use eg::mono_font::ascii::FONT_6X12; // フォント
 use eg::prelude::*; // 描画のほぼ必須モジュール
-
-use usb_device::prelude::*; // USB通信のほぼ必須モジュール
+use embedded_graphics as eg; // 描画関係
 
 use heapless::spsc::Queue; // 送受信処理の宣言 use を外すことができない
 
@@ -49,6 +45,14 @@ fn main() -> ! {
         )
         .unwrap();
 
+    // 文字描画インスタンス
+    let mut t = Terminal::new(display);
+    t.write_str("Hello! Send text to me over the USB serial port, and I'll display it!");
+    t.write_str("\n");
+    t.write_str("On linux:\n");
+    t.write_str("  sudo stty -F /dev/ttyACM0 115200 raw -echo\n");
+    t.write_str("  sudo bash -c \"echo 'Hi' > /dev/ttyACM0\"\n");
+
     // USB制御インスタンスの初期化
     let bus_allocator = unsafe {
         USB_ALLOCATOR = Some(sets.usb.usb_allocator(
@@ -61,12 +65,15 @@ fn main() -> ! {
     unsafe {
         USB_SERIAL = Some(usbd_serial::SerialPort::new(bus_allocator));
         USB_BUS = Some(
-            UsbDeviceBuilder::new(bus_allocator, UsbVidPid(0x16c0, 0x27dd))
-                .manufacturer("Fake company")
-                .product("Serial port")
-                .serial_number("TEST")
-                .device_class(usbd_serial::USB_CLASS_CDC)
-                .build(),
+            usb_device::prelude::UsbDeviceBuilder::new(
+                bus_allocator,
+                usb_device::prelude::UsbVidPid(0x16c0, 0x27dd),
+            )
+            .manufacturer("Fake company")
+            .product("Serial port")
+            .serial_number("TEST")
+            .device_class(usbd_serial::USB_CLASS_CDC)
+            .build(),
         );
     }
     unsafe {
@@ -78,18 +85,10 @@ fn main() -> ! {
         cortex_m::peripheral::NVIC::unmask(interrupt::USB_TRCPT1);
     }
 
-    // 文字描画インスタンス
-    let mut t = Terminal::new(display);
-    t.write_str("Hello! Send text to me over the USB serial port, and I'll display it!");
-    t.write_str("\n");
-    t.write_str("On linux:\n");
-    t.write_str("  sudo stty -F /dev/ttyACM0 115200 raw -echo\n");
-    t.write_str("  sudo bash -c \"echo 'Hi' > /dev/ttyACM0\"\n");
-
-    // 通信リクエストインスタンス
+    // 授受データの受信側(.1)のインスタンス化
     let mut consumer = unsafe { Q.split().1 };
     loop {
-        // 通信が来たときにLEDを点滅させる
+        // 通信が来たときに文字を描画してLEDを点滅させる
         if let Some(segment) = consumer.dequeue() {
             t.write(segment);
             user_led.toggle().ok();
@@ -103,7 +102,7 @@ type TextSegment = ([u8; 32], usize);
 // 文字描画構造体
 struct Terminal<'a> {
     text_style: eg::mono_font::MonoTextStyle<'a, eg::pixelcolor::Rgb565>,
-    cursor: Point,
+    cursor: eg::prelude::Point,
     display: wio::LCD,
     scroller: wio::Scroller,
 }
@@ -115,11 +114,14 @@ impl<'a> Terminal<'a> {
         let style = eg::primitives::PrimitiveStyleBuilder::new()
             .fill_color(eg::pixelcolor::Rgb565::BLACK)
             .build();
-        let backdrop =
-            eg::primitives::Rectangle::with_corners(Point::new(0, 0), Point::new(320, 320))
-                .into_styled(style);
+        let backdrop = eg::primitives::Rectangle::with_corners(
+            eg::prelude::Point::new(0, 0),
+            eg::prelude::Point::new(320, 320),
+        )
+        .into_styled(style);
         backdrop.draw(&mut display).ok().unwrap();
 
+        // 文字の折り返し(?)
         let scroller = display.configure_vertical_scroll(0, 0).unwrap();
 
         Self {
@@ -127,7 +129,7 @@ impl<'a> Terminal<'a> {
                 &FONT_6X12,
                 eg::pixelcolor::Rgb565::WHITE,
             ),
-            cursor: Point::new(10, 15), // 文字が画面内に収まるように初期位置を調整
+            cursor: eg::prelude::Point::new(10, 15), // 文字が画面内に収まるように初期位置を調整
             display,
             scroller,
         }
@@ -199,21 +201,29 @@ impl<'a> Terminal<'a> {
     }
 }
 
-// USB通信のインスタンス等
+// USB通信のstaticインスタンス
 static mut USB_ALLOCATOR: Option<usb_device::bus::UsbBusAllocator<wio::hal::usb::UsbBus>> = None;
-static mut USB_BUS: Option<UsbDevice<wio::hal::usb::UsbBus>> = None;
+static mut USB_BUS: Option<usb_device::prelude::UsbDevice<wio::hal::usb::UsbBus>> = None;
 static mut USB_SERIAL: Option<usbd_serial::SerialPort<wio::hal::usb::UsbBus>> = None;
-static mut Q: Queue<TextSegment, 16_usize> = Queue::new();
+// 通信データのメモリ保存場所
+static mut Q: heapless::spsc::Queue<TextSegment, 16_usize> = Queue::new();
 
+// シリアル通信の受信データをWio Terminalの画面に表示する
 fn poll_usb() {
     unsafe {
+        // USB接続判定が生きている
         if let Some(usb_dev) = USB_BUS.as_mut() {
+            // USB接続機器が生きている
             if let Some(serial) = USB_SERIAL.as_mut() {
+                // データを受信できたかどうか判定する(?)
                 usb_dev.poll(&mut [serial]);
                 let mut buf = [0u8; 32];
+                // 授受データの内、producer(.0)データを取り出す
                 let mut terminal = Q.split().0;
 
+                // ポートからデータを読み込めるかどうか
                 if let Ok(count) = serial.read(&mut buf) {
+                    // Queueテーブルの末尾に受信したデータを加える
                     terminal.enqueue((buf, count)).ok().unwrap();
                 };
             }
@@ -221,6 +231,7 @@ fn poll_usb() {
     };
 }
 
+// 3つのUSBポート(?)のいずれかで通信ができれば、画面に表示するために interrupt を宣言する
 #[interrupt]
 fn USB_OTHER() {
     poll_usb();

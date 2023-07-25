@@ -12,4 +12,4 @@ embedded-graphics = "0.7.1" # 最新の0.8.0だとdisplayを渡せない
 heapless = "0.7.16" # ヒープ上のデータをスタックに置けるようにする
 cortex-m = "0.7.7" # マイコンのドライバへのアクセス
 usbd-serial = "0.1" # USB-シリアル通信
-usb-device = "0.2" # USBデバイス
+usb-device = "0.2.9" # USBデバイス
