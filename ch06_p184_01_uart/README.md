@@ -38,8 +38,8 @@ USBシリアル変換モジュールを接続する前後で```mode```コマン�
 ![Alt text](<terminal config.png>)
 
 ## ジャンパワイヤの接続
-Wio Terminal の背面側の上側右から3番目がGND、4番目がRXD(受信)、5番目がTXD(送信)です。
-これに対してUSBシリアル変換モジュールのGND、TXD、RXDをつないでください。
+Wio Terminal の背面側の上側右から3番目がGND、4番目がTXD(送信)、5番目がRXD(受信)です。
+これに対してUSBシリアル変換モジュールのGND、RXD、TXDをつないでください。
 ### USBシリアル変換モジュール
 ![Alt text](<Usb serial.JPG>)
 ### Wio Terminal の背面
