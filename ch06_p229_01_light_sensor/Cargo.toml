@@ -1,0 +1,13 @@
+[package]
+name = "ch06_p229_01_light_sensor"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+wio_terminal = "0.6.1" # 必須クレート
+panic-halt = "0.2" # 必須クレート
+embedded-graphics = "0.7.1" # 描画関係
+itoa = "1.0.9" # 整数型を文字列スライスに変換する
+
